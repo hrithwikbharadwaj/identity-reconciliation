@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import auth from '../utils/auth';
-import { getContactDetails, deleteAll } from '../services/Contact';
+import { getContactDetails } from '../services/Contact';
 
 const router = Router();
 
