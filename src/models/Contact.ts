@@ -1,8 +1,8 @@
 export interface Contact {
-    id: Number;
+    id: number;
     phoneNumber?: string;
     email?: string;
-    linkedId: Number;
+    linkedId: number;
     linkPrecedence: LinkPrecedence.PRIMARY | LinkPrecedence.SECONDARY;
     createdAt: Date;
     updatedAt: Date;
@@ -16,7 +16,7 @@ export enum LinkPrecedence {
 
 export interface ContactResponse {
     primaryContactId: Number;
-    emails: Array<string>,
-    phoneNumbers: Array<string>,
-    secondaryContactIds: Array<number>
+    emails: string[],
+    phoneNumbers: string[],
+    secondaryContactIds: number[]
 }

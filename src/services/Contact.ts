@@ -9,7 +9,7 @@ export const getContactDetails = async (email?: string, phoneNumber?: string) =>
                 { phoneNumber }
             ]
         }
-    });
+    }) as Contact[];
     if (!records?.length) {
         const newContact = await createContact(email, phoneNumber);
         return { contact: formIdentityResponse([newContact]) };
@@ -58,21 +58,21 @@ const findAllSecondaryRecords = async (id: number, contactIds: number[]) => {
     });
 }
 
-const addRemainingRecords = async (contacts: Array<any>) => {
+const addRemainingRecords = async (contacts: Contact[]) => {
     const firstContact = contacts[0];
     const contactIds = contacts.map(({ id }) => id);
     if (firstContact.linkPrecedence === LinkPrecedence.SECONDARY) {
         const id = firstContact.linkedId;
-        const records = await findPrimaryAndAllSecondaryRecords(id, contactIds);
+        const records = await findPrimaryAndAllSecondaryRecords(id, contactIds) as Contact[];
         contacts.push(...records);
         return;
     }
     const id = firstContact.id;
-    const records = await findAllSecondaryRecords(id, contactIds);
+    const records = await findAllSecondaryRecords(id, contactIds) as Contact[];
     contacts.push(...records);
 }
 
-const addContactIfNew = async (records: Array<any>, email?: string, phoneNumber?: string) => {
+const addContactIfNew = async (records:Contact[], email?: string, phoneNumber?: string) => {
     const primaryRecordId = records[0].id;
     const uniqueEmailIds = [...new Set(records.map(record => record.email))] as string[];
     const uniquePhoneNumbers = [...new Set(records.map(record => record.phoneNumber))] as string[];
@@ -88,13 +88,13 @@ const addContactIfNew = async (records: Array<any>, email?: string, phoneNumber?
                 linkedId: primaryRecordId,
                 linkPrecedence: LinkPrecedence.SECONDARY
             }
-        });
+        }) as Contact;
         records.push(newContact);
     }
 }
 
 // checks whether the secondaryContacts are primary and updates them to primary and refrences it with primarycontactId
-const updatePrimaryToSecondary = async (sortedRecords: any[]) => {
+const updatePrimaryToSecondary = async (sortedRecords: Contact[]) => {
     const primaryContactId = sortedRecords[0].id;
     const secondaryContacts = sortedRecords.slice(1);
 
@@ -119,7 +119,7 @@ const updatePrimaryToSecondary = async (sortedRecords: any[]) => {
     }
 };
 
-const formIdentityResponse = (contacts: Array<any>) => {
+const formIdentityResponse = (contacts:Contact[]) => {
     const response: ContactResponse = {
         primaryContactId: contacts[0].id,
         emails: [],

@@ -6,7 +6,7 @@
       "lib": ["esnext"],
       "esModuleInterop": true,
       "target": "ES2021",
-      "noImplicitAny": false,
+      // "noImplicitAny": false,
       "moduleResolution": "Node"
     }
   }
