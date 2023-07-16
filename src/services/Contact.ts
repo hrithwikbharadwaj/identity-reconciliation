@@ -14,55 +14,66 @@ export const getContactDetails = async (email?: string, phoneNumber?: string) =>
         const newContact = await createContact(email, phoneNumber);
         return { contact: formIdentityResponse([newContact]) };
     }
-    await addRemainingRecords(records, email, phoneNumber);
-    const sortedRecords = records.sort( (current, next) => current.createdAt.getTime() - next.createdAt.getTime());
-    const primaryRecordId = sortedRecords[0].id as number;
-    await checkAndUpdateRecordsToSecondary(sortedRecords.slice(1), primaryRecordId);
-    await addContactIfNotExists(sortedRecords, email, phoneNumber);
+    await addRemainingRecords(records);
+    const sortedRecords = records.sort((current, next) => current.createdAt.getTime() - next.createdAt.getTime());
+    await updatePrimaryToSecondary(sortedRecords);
+    await addContactIfNew(sortedRecords, email, phoneNumber);
     return { contact: formIdentityResponse(sortedRecords) };
 }
 
-const addRemainingRecords = async(contacts:Array<any>, email?:string, phoneNumber?:string)=>{
-    const firstContact = contacts[0];
-
-    const recordsMap = contacts.reduce((map, contact)=> {
-        map[contact.id] = contact;
-        return map;
-    }, {});
-
-    if(firstContact.linkPrecedence === LinkPrecedence.SECONDARY){
-        const id = firstContact.linkedId;
-        // find the primary record and the all the secondary records.
-        const data = await prisma.contact.findMany({
-            where: {
-               OR: [
-                {
-                    id
-                },
-                {
-                    linkedId: id
+const findPrimaryAndAllSecondaryRecords = async (id: number, contactIds: number[]) => {
+    return await prisma.contact.findMany({
+        where: {
+            AND: {
+                OR: [
+                    {
+                        id
+                    },
+                    {
+                        linkedId: id
+                    }
+                ],
+                id: {
+                    not: {
+                        in: contactIds
+                    }
                 }
-               ]
             }
-        });
-        const filteredData = data.filter( record => !recordsMap[record.id]);
-        contacts.push(...filteredData);
-    }
-    else if(firstContact.linkPrecedence === LinkPrecedence.PRIMARY){
-        const id = firstContact.id;
-        // find all the secondary records for the primary record
-        const data = await prisma.contact.findMany({
-            where: {
-                linkedId: id
-            }
-        });
-        const filteredData = data.filter( record => !recordsMap[record.id]);
-        contacts.push(...filteredData);
-    }
+        }
+    });
 }
 
-const addContactIfNotExists = async (records: Array<any>, email?: string, phoneNumber?: string) => {
-    const primaryRecord = records.find(record => record.linkPrecedence === LinkPrecedence.PRIMARY);
+const findAllSecondaryRecords = async (id: number, contactIds: number[]) => {
+    return await prisma.contact.findMany({
+        where: {
+            AND: {
+                linkedId: id,
+                id: {
+                    not: {
+                        in: contactIds
+                    }
+                }
+            }
+        }
+    });
+}
+
+const addRemainingRecords = async (contacts: Array<any>) => {
+    const firstContact = contacts[0];
+    const contactIds = contacts.map(({ id }) => id);
+    if (firstContact.linkPrecedence === LinkPrecedence.SECONDARY) {
+        const id = firstContact.linkedId;
+        const records = await findPrimaryAndAllSecondaryRecords(id, contactIds);
+        contacts.push(...records);
+        return;
+    }
+    const id = firstContact.id;
+    const records = await findAllSecondaryRecords(id, contactIds);
+    contacts.push(...records);
+}
+
+const addContactIfNew = async (records: Array<any>, email?: string, phoneNumber?: string) => {
+    const primaryRecordId = records[0].id;
     const uniqueEmailIds = [...new Set(records.map(record => record.email))] as string[];
     const uniquePhoneNumbers = [...new Set(records.map(record => record.phoneNumber))] as string[];
     const isNewEmail = !!email && !uniqueEmailIds.includes(email);
@@ -74,7 +85,7 @@ const addContactIfNotExists = async (records: Array<any>, email?: string, phoneN
             data: {
                 phoneNumber,
                 email,
-                linkedId: primaryRecord.id,
+                linkedId: primaryRecordId,
                 linkPrecedence: LinkPrecedence.SECONDARY
             }
         });
@@ -82,26 +93,31 @@ const addContactIfNotExists = async (records: Array<any>, email?: string, phoneN
     }
 }
 
-const checkAndUpdateRecordsToSecondary = async (secondaryContacts:any[], primaryContactId:number) => {
+// checks whether the secondaryContacts are primary and updates them to primary and refrences it with primarycontactId
+const updatePrimaryToSecondary = async (sortedRecords: any[]) => {
+    const primaryContactId = sortedRecords[0].id;
+    const secondaryContacts = sortedRecords.slice(1);
+
     const primaryContactIds = secondaryContacts
-      .filter((contact) => contact.linkPrecedence === LinkPrecedence.PRIMARY)
-      .map((contact) => contact.id);
-  
+        .filter((contact) => contact.linkPrecedence === LinkPrecedence.PRIMARY)
+        .map((contact) => contact.id);
+
     const primaryContactExists = !!primaryContactIds.length;
+    
     if (primaryContactExists) {
-      await prisma.contact.updateMany({
-        where: {
-          id: {
-            in: primaryContactIds,
-          },
-        },
-        data: {
-          linkPrecedence: LinkPrecedence.SECONDARY,
-          linkedId: primaryContactId,
-        },
-      });
+        await prisma.contact.updateMany({
+            where: {
+                id: {
+                    in: primaryContactIds,
+                },
+            },
+            data: {
+                linkPrecedence: LinkPrecedence.SECONDARY,
+                linkedId: primaryContactId,
+            },
+        });
     }
-  };
+};
 
 const formIdentityResponse = (contacts: Array<any>) => {
     const response: ContactResponse = {
@@ -117,7 +133,7 @@ const formIdentityResponse = (contacts: Array<any>) => {
         if (contact.phoneNumber && !response.phoneNumbers.includes(contact.phoneNumber)) {
             response.phoneNumbers.push(contact.phoneNumber)
         }
-        if(contact.id !== response.primaryContactId){
+        if (contact.id !== response.primaryContactId) {
             response.secondaryContactIds.push(contact.id);
         }
     });

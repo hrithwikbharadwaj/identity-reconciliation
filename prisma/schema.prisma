@@ -22,6 +22,7 @@ model Contact {
 
   @@index([phoneNumber])
   @@index([email])
+  @@index([linkedId])
 }
 
 enum LinkPrecedence {
