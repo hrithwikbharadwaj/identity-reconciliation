@@ -3,13 +3,13 @@ export interface Contact {
     phoneNumber?: string;
     email?: string;
     linkedId: Number;
-    linkPrecedence: Precedence.PRIMARY | Precedence.SECONDARY;
+    linkPrecedence: LinkPrecedence.PRIMARY | LinkPrecedence.SECONDARY;
     createdAt: Date;
     updatedAt: Date;
     deletedAt: Date;
 }
 
-export enum Precedence {
+export enum LinkPrecedence {
     SECONDARY = "secondary",
     PRIMARY = "primary"
 }
