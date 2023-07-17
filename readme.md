@@ -9,7 +9,7 @@ Make a POST Request to this [URL](https://bitespeed.tapthe.link/api/identify) wi
 ```jsx
 {
     "phoneNumber": "898",
-    "emailId": "hey@example.com"
+    "email": "hey@example.com"
 }
 ```
 
