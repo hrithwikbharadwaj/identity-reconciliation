@@ -1,5 +1,6 @@
 import prisma from "../../prisma/prisma-client"
 import { Contact, ContactResponse, LinkPrecedence } from "../models/Contact";
+import HttpException from "../models/HttpException";
 
 export const getContactDetails = async (email?: string, phoneNumber?: string) => {
     const records = await prisma.contact.findMany({
@@ -19,6 +20,16 @@ export const getContactDetails = async (email?: string, phoneNumber?: string) =>
     await updatePrimaryToSecondary(sortedRecords);
     await addContactIfNew(sortedRecords, email, phoneNumber);
     return { contact: formIdentityResponse(sortedRecords) };
+}
+
+export const validateInputs = (email: string, phoneNumber: string) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (email && !emailRegex.test(email)) {
+        throw new HttpException(400, 'Provide Valid Email');
+    }
+    if (!email && !phoneNumber) {
+        throw new HttpException(400, 'Provide email or phoneNumber');
+    }
 }
 
 const findPrimaryAndAllSecondaryRecords = async (id: number, contactIds: number[]) => {
