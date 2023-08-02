@@ -52,6 +52,12 @@ npx prisma migrate dev
 npm run dev
 ```
 
+## Try it with Docker
+
+The app is dockerised and you can run the below command to get the app running.
+```
+docker compose up -d
+```
 ## Deploy it to Cloud
 
 If you are planning to deploy this service in AWS EC2 Machine.
