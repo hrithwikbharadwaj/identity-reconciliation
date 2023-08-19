@@ -17,7 +17,7 @@ export const getContactDetails = async (email?: string, phoneNumber?: string) =>
     }
     await addRemainingRecords(records);
     const sortedRecords = records.sort((current, next) => current.createdAt.getTime() - next.createdAt.getTime());
-    await updatePrimaryToSecondary(sortedRecords);
+    await updatePrimaryAndDecendentsToSecondary(sortedRecords);
     await addContactIfNew(sortedRecords, email, phoneNumber);
     return { contact: formIdentityResponse(sortedRecords) };
 }
@@ -32,58 +32,56 @@ export const validateInputs = (email: string, phoneNumber: string) => {
     }
 }
 
-const findPrimaryAndAllSecondaryRecords = async (id: number, contactIds: number[]) => {
+const addRemainingRecords = async (contacts: Contact[]) => {
+    const records = await findPrimaryAndAllSecondaryRecords(contacts) as Contact[];
+    contacts.push(...records);
+}
+
+const findPrimaryAndAllSecondaryRecords = async (contacts: Contact[]) => {
     return await prisma.contact.findMany({
         where: {
             AND: {
                 OR: [
                     {
-                        id
+                        linkedId: {
+                            in: contacts
+                                .filter((contact) => contact.linkPrecedence == LinkPrecedence.PRIMARY)
+                                .map((contact) => {
+                                    return contact.id;
+                                })
+                        }
                     },
                     {
-                        linkedId: id
+                        linkedId: {
+                            in: contacts
+                                .filter((contact) => contact.linkPrecedence == LinkPrecedence.SECONDARY)
+                                .map((contact) => {
+                                    return contact.linkedId;
+                                })
+                        }
+                    },
+                    {
+                        id: {
+                            in: contacts
+                                .filter((contact) => contact.linkPrecedence == LinkPrecedence.SECONDARY)
+                                .map((contact) => {
+                                    return contact.linkedId;
+                                })
+                        }
                     }
                 ],
                 id: {
                     not: {
-                        in: contactIds
-                    }
-                }
-            }
-        }
+                        in: contacts.map((contact) => contact.id),
+                    },
+                },
+            },
+        },
     });
 }
 
-const findAllSecondaryRecords = async (id: number, contactIds: number[]) => {
-    return await prisma.contact.findMany({
-        where: {
-            AND: {
-                linkedId: id,
-                id: {
-                    not: {
-                        in: contactIds
-                    }
-                }
-            }
-        }
-    });
-}
 
-const addRemainingRecords = async (contacts: Contact[]) => {
-    const firstContact = contacts[0];
-    const contactIds = contacts.map(({ id }) => id);
-    if (firstContact.linkPrecedence === LinkPrecedence.SECONDARY) {
-        const id = firstContact.linkedId;
-        const records = await findPrimaryAndAllSecondaryRecords(id, contactIds) as Contact[];
-        contacts.push(...records);
-        return;
-    }
-    const id = firstContact.id;
-    const records = await findAllSecondaryRecords(id, contactIds) as Contact[];
-    contacts.push(...records);
-}
-
-const addContactIfNew = async (records:Contact[], email?: string, phoneNumber?: string) => {
+const addContactIfNew = async (records: Contact[], email?: string, phoneNumber?: string) => {
     const primaryRecordId = records[0].id;
     const uniqueEmailIds = [...new Set(records.map(record => record.email))] as string[];
     const uniquePhoneNumbers = [...new Set(records.map(record => record.phoneNumber))] as string[];
@@ -104,33 +102,43 @@ const addContactIfNew = async (records:Contact[], email?: string, phoneNumber?: 
     }
 }
 
-// checks whether the secondaryContacts are primary and updates them to primary and refrences it with primarycontactId
-const updatePrimaryToSecondary = async (sortedRecords: Contact[]) => {
-    const primaryContactId = sortedRecords[0].id;
+// checks whether the new secondaryContacts have primary records and it's secondaries
+// and updates them to primary and refrences it with primarycontactId
+const updatePrimaryAndDecendentsToSecondary = async (sortedRecords: Contact[]) => {
+    const newPrimaryContactId = sortedRecords[0].id;
     const secondaryContacts = sortedRecords.slice(1);
 
     const primaryContactIds = secondaryContacts
         .filter((contact) => contact.linkPrecedence === LinkPrecedence.PRIMARY)
         .map((contact) => contact.id);
 
-    const primaryContactExists = !!primaryContactIds.length;
-    
-    if (primaryContactExists) {
+    const secondaryContactIds = secondaryContacts
+        .filter(
+            (contact) =>
+                contact.linkPrecedence === LinkPrecedence.SECONDARY &&
+                primaryContactIds.includes(contact.linkedId)
+        )
+        .map((contact) => contact.id);
+    ;
+
+    const contactIdsToUpdate = [...primaryContactIds, ...secondaryContactIds];
+
+    if (!!contactIdsToUpdate.length) {
         await prisma.contact.updateMany({
             where: {
                 id: {
-                    in: primaryContactIds,
+                    in: contactIdsToUpdate,
                 },
             },
             data: {
                 linkPrecedence: LinkPrecedence.SECONDARY,
-                linkedId: primaryContactId,
+                linkedId: newPrimaryContactId,
             },
         });
     }
 };
 
-const formIdentityResponse = (contacts:Contact[]) => {
+const formIdentityResponse = (contacts: Contact[]) => {
     const response: ContactResponse = {
         primaryContactId: contacts[0].id,
         emails: [],
